@@ -1,3 +1,3 @@
-module RPC
+module ZRPC
 
 go 1.23
