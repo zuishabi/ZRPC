@@ -30,7 +30,8 @@ var DefaultOption = &Option{
 }
 
 type Server struct {
-	serviceMap sync.Map
+	serviceMap         sync.Map
+	onConnDisconnected func()
 }
 
 func NewServer() *Server {
@@ -149,6 +150,13 @@ func (server *Server) readRequestHeader(cc codec.Codec) (*codec.Header, error) {
 		if err != io.EOF && !errors.Is(err, io.ErrUnexpectedEOF) {
 			log.Println("rpc server: read header error:", err)
 		}
+		//当出现以下错误时，代表连接被关闭案例
+		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) ||
+			strings.Contains(err.Error(), "wsarecv: An existing connection was forcibly closed by the remote host") {
+			if server.onConnDisconnected != nil {
+				server.onConnDisconnected()
+			}
+		}
 		return nil, err
 	}
 	return &h, nil
@@ -216,4 +224,14 @@ func (server *Server) handleRequest(cc codec.Codec, req *request, sending *sync.
 	case <-called:
 		<-sent
 	}
+}
+
+// OnConnDisconnected 钩子函数，当连接断开时触发
+func (server *Server) OnConnDisconnected(hook func()) {
+	server.onConnDisconnected = hook
+}
+
+// OnConnDisconnected 设置默认服务器的断开连接的钩子函数
+func OnConnDisconnected(hook func()) {
+	DefaultServer.onConnDisconnected = hook
 }
